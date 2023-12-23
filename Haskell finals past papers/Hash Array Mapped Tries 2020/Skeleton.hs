@@ -103,9 +103,33 @@ member value valueHash trieToCheck blockSize
 -- Part III
 
 insert :: HashFun -> Int -> Int -> Int -> Trie -> Trie
-insert
-  = undefined
+insert hasher maxDepth blockSize v0 trie = insert' 0 trie v0
+  where
+    endCon = maxDepth - 1
+    -- get to leaf so add it too leaf
+    insert' :: Int -> Trie -> Int -> Trie
+    insert' _ (Leaf intList) v
+      | v `elem` intList = Leaf intList
+      --works with v: intList as order doesn't matter but this passes the tests
+      | otherwise = Leaf ( intList ++ [v])
+
+    -- get to node
+    insert' curDepth (Node bitVector subNodes) v
+        -- get to max depth so return Leaf [int]
+      | curDepth == endCon = Leaf [v]
+      | testBit bitVector i = Node bitVector (replace i' subNodes (replaceValue (subNodes !! i')))
+      | otherwise = Node (bit (i) .|. bitVector) (insertAt i' (Term v) subNodes)
+      where 
+        value = hasher v
+        i = getIndex value curDepth blockSize
+        i' = (countOnesFrom i bitVector)
+        replaceValue :: SubNode -> SubNode
+        replaceValue (SubTrie trie') = SubTrie (insert' (curDepth + 1) trie' v)
+        replaceValue original@(Term v') 
+          | v' == v = original
+          | otherwise = SubTrie (insert'  (curDepth + 1) (insert' (curDepth + 1) empty v') v)
+
 
 buildTrie :: HashFun -> Int -> Int -> [Int] -> Trie
-buildTrie
-  = undefined
+buildTrie hasher maxDepth blockSize values
+  = foldl (flip (insert hasher maxDepth blockSize)) empty values
