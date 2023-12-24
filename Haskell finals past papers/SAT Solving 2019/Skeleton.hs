@@ -96,8 +96,21 @@ flatten formula = (map flatten' . unPackA) formula
 
 -- 5 marks
 propUnits :: CNFRep -> (CNFRep, [Int])
-propUnits 
-  = undefined
+propUnits clauseList  
+  | (noSingles == clauseList) = (clauseList, [])
+  | otherwise = (finalClauseList, removedValues ++ otherRemovedSingles)
+  where
+    (noSingles, removedValues) = removeSingles clauseList
+    propNoSignals = [subList| x <- noSingles, let subList = [y| y <- x, not ( -y `elem` removedValues)], not (null subList)]
+    
+    (finalClauseList, otherRemovedSingles) = propUnits propNoSignals
+    removeSingles :: CNFRep -> (CNFRep, [Int])
+    removeSingles [] = ([], [])
+    removeSingles (x: xs) 
+      | (x1: []) <- x = (nextList, x1: nextRemoved)
+      | otherwise = (x: nextList, nextRemoved)
+      where
+        (nextList, nextRemoved) = removeSingles xs
 
 -- 4 marks
 dp :: CNFRep -> [[Int]]
