@@ -2,7 +2,7 @@ module SOL where
 
 import Data.List
 import Data.Maybe
-
+import Debug.Trace
 import Types
 import TestData
 
@@ -13,8 +13,9 @@ myFunc = filter isSingle
     isSingle (a: []) = True
     isSingle _       = False
 
+alphabet :: String
+alphabet = "Xabcdefghijklmnopqrstuvwxyz"
 
-    
 printF :: Formula -> IO()
 printF
   = putStrLn . showF
@@ -36,7 +37,7 @@ lookUp :: Eq a => a -> [(a, b)] -> b
 -- Pre: The item being looked up has a unique binding in the list
 lookUp item list = b'
   where 
-    ((a', b'): xs) = dropWhile ((/= item) . fst) list
+    ((_, b'): _) = dropWhile ((/= item) . fst) list
 
 -- 3 marks
 vars :: Formula -> [Id]
@@ -99,29 +100,65 @@ propUnits :: CNFRep -> (CNFRep, [Int])
 propUnits clauseList  
   | (noSingles == clauseList) = (clauseList, [])
   | otherwise = (finalClauseList, removedValues ++ otherRemovedSingles)
-  where
-    (noSingles, removedValues) = removeSingles clauseList
-    propNoSignals = [subList| x <- noSingles, let subList = [y| y <- x, not ( -y `elem` removedValues)], not (null subList)]
-    
-    (finalClauseList, otherRemovedSingles) = propUnits propNoSignals
-    removeSingles :: CNFRep -> (CNFRep, [Int])
-    removeSingles [] = ([], [])
-    removeSingles (x: xs) 
-      | (x1: []) <- x = (nextList, x1: nextRemoved)
-      | otherwise = (x: nextList, nextRemoved)
-      where
-        (nextList, nextRemoved) = removeSingles xs
+    where
+      (noSingles, removedValues) = removeSingles clauseList
+      propNoSignals 
+        = [subList | x <- noSingles, let negativeX = (map negate x),  let subList = if ((intersect removedValues negativeX) == negativeX) then ([]) else ([y | y <- x, not ( -y `elem` removedValues)]), null ( intersect removedValues x)]
+      (finalClauseList, otherRemovedSingles) = propUnits propNoSignals
+      
+      removeSingles :: CNFRep -> (CNFRep, [Int])
+      removeSingles [] = ([], [])
+      removeSingles (x: xs) 
+        | (x1: []) <- x, not ((-x1) `elem` nextRemoved) = (nextList, x1: nextRemoved)
+        | otherwise = (x: nextList, nextRemoved)
+          where
+            (nextList, nextRemoved) = removeSingles xs
 
 -- 4 marks
 dp :: CNFRep -> [[Int]]
-dp 
-  = undefined
+dp formula
+  | null cnfFormula' = [singleVals]
+  | [] `elem` cnfFormula' = []
+  | otherwise = 
+    let
+      ((setVariable : xs):ys) = cnfFormula'
+      option1     = [setVariable] : formulaToPass
+      option2     = [- setVariable] : formulaToPass
+    in
+      
+      ((dp option1) ++ (dp option2))
+    where
+      (cnfFormula', singleVals) = propUnits formula
+      usefullSingles = map (:[]) singleVals
+      formulaToPass = usefullSingles ++ cnfFormula'
+
 
 --------------------------------------------------------------------------
 -- Part IV
 
 -- Bonus 2 marks
 allSat :: Formula -> [[(Id, Bool)]]
-allSat
-  = undefined
+allSat formula
+  = [[if (y < 0) then ((lookUp' (-y), False)) else ((lookUp' y, True)) | y <- x] | x <- sols]
+  where
+    sols = e1 . dp . flatten . toCNF formula
+    n      = length (vars formula)
+    values' = [1..n]
+    
+    e1 :: [[Int]] -> [[Int]]
+    e1 []     = []
+    e1 (x:xs) 
+      | null (drop (n - 1) x) = (e1' x missingValues) ++ evalRest
+      | otherwise = x : evalRest
+        where
+          missingValues = [i | i <- values', null (intersect [i, -i] x)]
+          evalRest      = e1 xs
+          e1' :: [Int] -> [Int] -> [[Int]]
+          e1' listNumb []      = [listNumb]
+          e1' listNumb (y: ys) = (e1' (y:listNumb) ys) ++ (e1' ((-y):listNumb) ys)
 
+    theIDMap = idMap formula
+    lookUp' :: Int -> Id
+    lookUp' item  = a'
+      where 
+        ((a', _): _) = dropWhile ((/= item) . snd) theIDMap
