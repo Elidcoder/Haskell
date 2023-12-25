@@ -56,12 +56,15 @@ split3M xs
 -- Part II
 
 matches :: String -> ParseTree -> Bool
-matches
-  = undefined
+matches s (Synonym s') = s `elem` (synonyms s')
+matches s (Anagram _ s') = (sort s) == (sort s')
+matches s (Reversal _ t) = matches (reverse s) t
+matches s (Insertion _ t1 t2) = not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (uninsert s)))
+matches s (Charade _ t1 t2) = not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (split2 s)))
 
 evaluate :: Parse -> Int -> [String]
-evaluate 
-  = undefined
+evaluate (definition, link, parseTree) solLength
+  = filter (`matches` parseTree) (filter ((solLength ==) . length) (synonyms (unwords definition)))
 
 ------------------------------------------------------
 -- Part III
