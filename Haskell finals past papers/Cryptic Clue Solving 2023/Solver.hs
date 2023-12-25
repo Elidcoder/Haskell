@@ -16,22 +16,31 @@ punctuation
   = "';.,-!?"
 
 cleanUp :: String -> String
-cleanUp 
-  = undefined
+cleanUp = filter (not . ( `elem` punctuation))
+
 
 split2 :: [a] -> [([a], [a])]
-split2 
-  = undefined
+split2 []     = []
+split2 (x:[]) = []
+split2 list = map (`splitAt` list) [1..(length list - 1)]
 
 split3 :: [a] -> [([a], [a], [a])]
-split3
-  = undefined
+split3 list
+  = split2WithEmpty ++ split2split2L
+  where 
+    split2List = split2 list
+    split2WithEmpty = map (\x -> (fst x, [], snd x)) split2List
+    split2split2L = concatMap (
+      \x -> 
+        let 
+          (first, third)    = x
+        in 
+          [(first', second', third) | (first', second')  <- split2 first]
+      ) split2List 
 
 uninsert :: [a] -> [([a], [a])]
-uninsert
-  = undefined
+uninsert list =  [(x2, x1 ++ x3) | (x1, x2, x3) <- split3 list, not (null x2)]
 
-{- Uncomment these functions when you have defined the above.
 split2M :: [a] -> [([a], [a])]
 split2M xs
   = sxs ++ [(y, x) | (x, y) <- sxs] 
@@ -43,8 +52,6 @@ split3M xs
   = sxs ++ [(z, y, x) | (x, y, z) <- sxs]
   where
     sxs = split3 xs
--}
-
 ------------------------------------------------------
 -- Part II
 
