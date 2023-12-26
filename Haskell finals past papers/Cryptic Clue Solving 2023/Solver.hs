@@ -16,7 +16,7 @@ punctuation
   = "';.,-!?"
 
 cleanUp :: String -> String
-cleanUp = filter (not . ( `elem` punctuation))
+cleanUp s = map (toLower) (filter (not . ( `elem` punctuation)) s)
 
 
 split2 :: [a] -> [([a], [a])]
@@ -59,8 +59,10 @@ matches :: String -> ParseTree -> Bool
 matches s (Synonym s') = s `elem` (synonyms s')
 matches s (Anagram _ s') = (sort s) == (sort s')
 matches s (Reversal _ t) = matches (reverse s) t
-matches s (Insertion _ t1 t2) = not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (uninsert s)))
-matches s (Charade _ t1 t2) = not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (split2 s)))
+matches s (Insertion _ t1 t2) = 
+  not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (uninsert s)))
+matches s (Charade _ t1 t2) 
+  = not (null (filter (\(a,b) -> (matches a t1) && (matches b t2)) (split2 s)))
 
 evaluate :: Parse -> Int -> [String]
 evaluate (definition, link, parseTree) solLength
@@ -79,24 +81,52 @@ parseWordplay ws
             parseCharade ws]
     
 parseSynonym :: [String] -> [ParseTree]
-parseSynonym 
-  = const []
+parseSynonym input
+  | null inputSynonyms = []
+  | otherwise = [Synonym parseInput]
+    where
+      parseInput    = unwords input
+      inputSynonyms = synonyms parseInput
 
 parseAnagram :: [String] -> [ParseTree]
-parseAnagram
-  = const []
+parseAnagram inputs = [Anagram a (unwords b) | (a, b) <- (split2M inputs), ((unwords a) `elem` anagramIndicators) ]
 
 parseReversal :: [String] -> [ParseTree]
-parseReversal
-  = const []
+parseReversal inputs = [Reversal a c | (a, b) <- (split2M inputs), ((unwords a) `elem` reversalIndicators), c <- parseWordplay b]
 
 parseInsertion :: [String] -> [ParseTree]
-parseInsertion
-  = const []
-
+parseInsertion input = finals
+  where
+    properTriplets = envelopeOrInsert (split3 input)
+    finals = [Insertion b a' c'| (a, b, c) <- properTriplets, a' <- a, c' <- c]
+    
+    envelopeOrInsert [] = []
+    envelopeOrInsert ((a, b, c):  xs)
+      | b' `elem` insertionIndicators = (a', b, c') : rest
+      | b' `elem` envelopeIndicators  = (c', b, a') : rest
+      | otherwise = rest
+        where
+          rest = envelopeOrInsert xs
+          b' = unwords b
+          a' = parseWordplay a
+          c' = parseWordplay c
+    
 parseCharade :: [String] -> [ParseTree]
-parseCharade 
-  = const []
+parseCharade input = finals
+  where
+    properTriplets = envelopeOrInsert (split3 input)
+    finals = [Charade b a' c'| (a, b, c) <- properTriplets, a' <- a, c' <- c]
+    
+    envelopeOrInsert [] = []
+    envelopeOrInsert ((a, b, c):  xs)
+      | b' `elem` beforeIndicators = (a', b, c') : rest
+      | b' `elem` afterIndicators  = (c', b, a') : rest
+      | otherwise = rest
+        where
+          rest = envelopeOrInsert xs
+          b' = unwords b
+          a' = parseWordplay a
+          c' = parseWordplay c
 
 -- Given...
 parseClue :: Clue -> [Parse]
@@ -104,12 +134,16 @@ parseClue clue@(s, n)
   = parseClueText (words (cleanUp s))
 
 parseClueText :: [String] -> [Parse]
-parseClueText
-  = undefined
+parseClueText input = 
+  [(def, oLink, wordplay') | (def, oLink, wordplay) <- split3M input, ((`elem` linkWords) . unwords) oLink, (not . null . synonyms . unwords) def, wordplay' <- parseWordplay wordplay ]
 
 solve :: Clue -> [Solution]
-solve 
-  = undefined
+solve c@(_, len)
+  = [(c, c'',s) | c'' <- c', s <- evaluate c'' len]
+  where
+    c' = parseClue c
+     
+
 
 
 ------------------------------------------------------
