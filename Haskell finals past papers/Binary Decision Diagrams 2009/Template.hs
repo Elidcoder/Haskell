@@ -18,27 +18,54 @@ type BDD = (NodeId, [BDDNode])
 
 -- Pre: The item is in the given table
 lookUp :: Eq a => a -> [(a, b)] -> b
-lookUp 
-  = undefined
+lookUp value
+  = snd . head . (filter ((value == ) . fst))
 
 checkSat :: BDD -> Env -> Bool
-checkSat 
-  = undefined
+checkSat (startID, bddNodes) environment
+  = checkSat' startID
+  where
+    checkSat' :: NodeId -> Bool
+    checkSat' 1 = True
+    checkSat' 0 = False
+    checkSat' n
+      | thisValueTrue = checkSat' idR
+      | otherwise = checkSat' idL
+      where
+        (index, idL, idR) = lookUp n bddNodes
+        thisValueTrue = lookUp index environment
 
 sat :: BDD -> [[(Index, Bool)]]
-sat 
-  = undefined
-
+sat bdd@(_, bddNodes)
+  = filter (checkSat bdd) options 
+  where
+    genOptions :: [Int] -> [[(Int, Bool)]]
+    genOptions [] = [[]]
+    genOptions (x: xs) =  (concat [[(x, True): fg', (x, False): fg'] | fg' <- futureGen])
+      where 
+        futureGen = genOptions xs
+    vars = nub (map (\(_, (x, _, _)) -> x) bddNodes)
+    options = genOptions vars
 ------------------------------------------------------
 -- PART II
 
 simplify :: BExp -> BExp
-simplify 
-  = undefined
+simplify (Not (Prim False))             = Prim True
+simplify (Not (Prim True))              = Prim False
+simplify (Or (Prim False) (Prim False)) = Prim False
+simplify (Or (Prim _) (Prim _))         = Prim True
+simplify (And (Prim True) (Prim True))  = Prim True
+simplify (And (Prim _) (Prim _))        = Prim False
+simplify exp                            = exp
 
 restrict :: BExp -> Index -> Bool -> BExp
-restrict 
-  = undefined
+restrict expr@(IdRef index) index' bool 
+  | index == index' = Prim bool
+  | otherwise       = expr
+restrict (Not bExp) index bool = simplify (Not (restrict bExp index bool)) 
+restrict (And bExp1 bExp2) index bool = simplify (And (restrict bExp1 index bool) (restrict bExp2 index bool)) 
+restrict (Or bExp1 bExp2) index bool = simplify (Or (restrict bExp1 index bool) (restrict bExp2 index bool)) 
+restrict bExp _ _ = bExp 
 
 ------------------------------------------------------
 -- PART III

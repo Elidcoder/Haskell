@@ -35,9 +35,11 @@ printF
 -- 1 mark
 lookUp :: Eq a => a -> [(a, b)] -> b
 -- Pre: The item being looked up has a unique binding in the list
-lookUp item list = b'
+--option 1
+lookUp value list = b'
   where 
-    ((_, b'): _) = dropWhile ((/= item) . fst) list
+    ((_, b'): _) = dropWhile ((/= value) . fst) list
+
 
 -- 3 marks
 vars :: Formula -> [Id]
