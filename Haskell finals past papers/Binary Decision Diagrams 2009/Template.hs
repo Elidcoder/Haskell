@@ -75,14 +75,20 @@ restrict bExp _ _ = bExp
 -- The question suggests the following definition (in terms of buildBDD')
 -- but you are free to implement the function differently if you wish.
 buildBDD :: BExp -> [Index] -> BDD
-buildBDD 
-  = undefined
+buildBDD e is'
+  = buildBDD' e 2 is'
 
 -- Potential helper function for buildBDD which you are free
 -- to define/modify/ignore/delete/embed as you see fit.
 buildBDD' :: BExp -> NodeId -> [Index] -> BDD
-buildBDD' 
-  = undefined
+buildBDD' e' nID []
+  | Prim e'' <- e', e'' = (1, []) 
+  | otherwise = (0, [])
+buildBDD' e' nodeID (x: xs) = (nodeID,(valuesL ++ valuesR ++ [thisNode]))
+  where
+    (indexL, valuesL) = buildBDD' (restrict e' x False)  (2 * nodeID)     xs
+    (indexR, valuesR) = buildBDD' (restrict e' x True) (2 * nodeID + 1) xs
+    thisNode =  (nodeID, (x, indexL, indexR))
 
 ------------------------------------------------------
 -- PART IV
@@ -90,8 +96,22 @@ buildBDD'
 -- Pre: Each variable index in the BExp appears exactly once
 --      in the Index list; there are no other elements
 buildROBDD :: BExp -> [Index] -> BDD
-buildROBDD 
-  = undefined
+buildROBDD e is'
+  = buildROBDD' e 2 is'
+
+-- Potential helper function for buildROBDD which you are free
+-- to define/modify/ignore/delete/embed as you see fit.
+buildROBDD' :: BExp -> NodeId -> [Index] -> BDD
+buildROBDD' e' nID []
+  | Prim e'' <- e', e'' = (1, []) 
+  | otherwise = (0, [])
+buildROBDD' e' nodeID (x: xs) 
+  | indexL == indexR = (nodeID,(valuesL ++ [(nodeID, (x, indexL, indexR))]))
+  | otherwise = (nodeID,(valuesL ++ valuesR ++ [thisNode]))
+  where
+    (indexL, valuesL) = buildROBDD' (restrict e' x False)  (2 * nodeID)   xs
+    (indexR, valuesR) = buildROBDD' (restrict e' x True) (2 * nodeID + 1) xs
+    thisNode =  (nodeID, (x, indexL, indexR))
 
 ------------------------------------------------------
 -- Examples for testing...
