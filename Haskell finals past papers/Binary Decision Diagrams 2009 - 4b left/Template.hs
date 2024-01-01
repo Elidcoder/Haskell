@@ -106,7 +106,7 @@ buildROBDD' e' nID []
   | Prim e'' <- e', e'' = (1, []) 
   | otherwise = (0, [])
 buildROBDD' e' nodeID (x: xs) 
-  | indexL == indexR = (nodeID,(valuesL ++ [(nodeID, (x, indexL, indexR))]))
+  | indexL == indexR = (indexL, valuesL)
   | otherwise = (nodeID,(valuesL ++ valuesR ++ [thisNode]))
   where
     (indexL, valuesL) = buildROBDD' (restrict e' x False)  (2 * nodeID)   xs

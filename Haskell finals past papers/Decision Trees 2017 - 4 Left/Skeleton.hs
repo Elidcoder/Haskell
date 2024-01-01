@@ -34,48 +34,67 @@ lookUp x table
   = fromMaybe (error ("lookUp error - no binding for " ++ show x ++ 
                       " in table: " ++ show table))
               (lookup x table)
-
+lookUp' :: (Eq a) => [(a, b)] ->  a -> b
+lookUp' table x
+  = fromMaybe (error ("lookUp' error"))
+              (lookup x table)
 --------------------------------------------------------------------
 -- PART I
 --------------------------------------------------------------------
 
 allSame :: Eq a => [a] -> Bool
-allSame 
-  = undefined
+allSame [] = True
+allSame list = (null. tail . nub) list 
 
 remove :: Eq a => a -> [(a, b)] -> [(a, b)]
-remove 
-  = undefined
+remove val = filter (not . (== val) . fst)
 
 lookUpAtt :: AttName -> Header -> Row -> AttValue
 --Pre: The attribute name is present in the given header.
-lookUpAtt
-  = undefined
+lookUpAtt atributeName header dataRow = v
+  where
+    vals = lookUp atributeName header 
+    (v: _) = [value | value <- dataRow, value `elem` vals]
 
 removeAtt :: AttName -> Header -> Row -> Row
-removeAtt
-  = undefined
+removeAtt atributeName header = filter (`notElem` (lookUp atributeName header))
 
 addToMapping :: Eq a => (a, b) -> [(a, [b])] -> [(a, [b])]
-addToMapping
-  = undefined
+addToMapping (a, b) values
+  = newValue : (filter ((/= (a)) . fst) values)
+  where 
+    newValue = (a, (b : (lookUp' (values ++ [(a, [])]) (a))))
 
 buildFrequencyTable :: Attribute -> DataSet -> [(AttValue, Int)]
 --Pre: Each row of the data set contains an instance of the attribute
-buildFrequencyTable
-  = undefined
-
+buildFrequencyTable (name, values) (_, rows)
+  = map (\x -> (x, lookUp' valueOfEach x)) values 
+  where
+    rows'   = concatMap (filter (`elem` values)) rows
+    options = group (sort rows') 
+    valueOfEach = (map (\x -> (head x, length x)) options) ++ (map (\v -> (v, 0)) values)
 --------------------------------------------------------------------
 -- PART II
 --------------------------------------------------------------------
 
 nodes :: DecisionTree -> Int
-nodes 
-  = undefined
+nodes Null
+  = 0
+nodes (Leaf _) = 1
+nodes (Node _ attList) = 1 + sum (map (nodes . snd) attList)
 
 evalTree :: DecisionTree -> Header -> Row -> AttValue
-evalTree 
-  = undefined
+evalTree fullTree header row
+  = evalT' fullTree
+  where 
+    evalT' :: DecisionTree -> AttValue
+    evalT' (Leaf attVal) = attVal
+    evalT' (Node attName valueDTreePairs) = evalT' (lookUp correctValue valueDTreePairs)
+      where
+        attOptions = lookUp attName header
+        (correctValue: cvs) = intersect attOptions row
+    evalT' _ = ""
+
 
 --------------------------------------------------------------------
 -- PART III
@@ -91,14 +110,31 @@ nextAtt :: AttSelector
 --Pre: The header contains at least one input attribute
 nextAtt (header, _) (classifierName, _)
   = head (filter ((/= classifierName) . fst) header)
+--type Attribute = (AttName, [AttValue])
 
 partitionData :: DataSet -> Attribute -> Partition
-partitionData 
-  = undefined
-
+partitionData (header', rows) att@(_, attValues)
+  = map (\v -> (v, makeDataset v)) attValues
+  where
+    --attValues = lookUp attToSplit header'
+    newHeader = filter (/= att) header'
+    makeDataset :: String -> DataSet
+    makeDataset k = (newHeader, [filter (not . (== k)) row | row <- rows, k `elem` row])
+-- recurse on rows now dataSet
 buildTree :: DataSet -> Attribute -> AttSelector -> DecisionTree 
-buildTree 
-  = undefined
+buildTree fullDataSet finishAttr@(n,vs) attrSelector
+  = bT' fullDataSet
+  where
+    bT' :: DataSet -> DecisionTree
+    bT' ds@(header', rows) 
+      | null rows || null finalAttRow = Null
+      | allSame finalAttRow, (firstAtt: xs) <- finalAttRow = Leaf firstAtt
+      | otherwise = Node (fst nextAttr) (map (\(a, b) -> (a, bT' b)) nextPartition) 
+        where
+          nextAttr = attrSelector ds finishAttr
+          nextPartition = partitionData ds nextAttr
+          finalAttRow = (concatMap (intersect vs) rows)
+
 
 --------------------------------------------------------------------
 -- PART IV
