@@ -91,8 +91,14 @@ renameFun (f, as, b) idMap
 -- Part IV
 --
 buildIG :: [[Id]] -> IG
-buildIG 
-  = undefined
+buildIG liveVarSets = (vars, simultaneousLives) 
+  where
+    pairs = filter pairsPlus liveVarSets
+    simultaneousLives = nub ( [(x,y) | pairs' <- pairs, x <- pairs', y <- pairs', x > y])
+    vars = nub (concatMap (\(a, b) -> [a,b]) simultaneousLives)
+    pairsPlus []     = False
+    pairsPlus (x:[]) = False
+    pairsPlus _      = True
 
 -----------------------------------------------------
 --
