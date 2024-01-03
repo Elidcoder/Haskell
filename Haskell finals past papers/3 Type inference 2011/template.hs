@@ -49,21 +49,22 @@ primTypes
 
 -- Pre: The search item is in the table
 lookUp :: Eq a => a -> [(a, b)] -> b
-lookUp 
-  = undefined
+lookUp val 
+  = snd . head . (dropWhile ((/= val) . fst))   
 
 tryToLookUp :: Eq a => a -> b -> [(a, b)] -> b
-tryToLookUp 
-  = undefined
+tryToLookUp a' b' = lookUp a' . (++[(a', b')]) 
 
 -- Pre: The given value is in the table
 reverseLookUp :: Eq b => b -> [(a, b)] -> [a]
-reverseLookUp 
-  = undefined
+reverseLookUp val list = [a | (a,b) <- list, b == val]
 
 occurs :: String -> Type -> Bool
-occurs 
-  = undefined
+occurs lookFor = occurs'
+  where
+    occurs' (TFun t1 t2) = (occurs' t1) || (occurs' t2)
+    occurs' (TVar str)   = (str == lookFor)
+    occurs' _            = False
 
 ------------------------------------------------------
 -- PART II
@@ -72,9 +73,41 @@ occurs
 -- Pre: All variables in the expression have a binding in the given 
 --      type environment
 inferType :: Expr -> TEnv -> Type
-inferType
-  = undefined
+inferType initialExpr environment = inferType' initialExpr
+  where
+    inferType' :: Expr -> Type
+    inferType' (Number numb)  = TInt
+    inferType' (Boolean bool) = TBool
+    inferType' (Prim str) = lookUp str primTypes
+    inferType' (Id str) = lookUp str environment
+    inferType' (Cond exp1 exp2 exp3) 
+      | ((inferType' exp1) == TBool) && ((inferType' exp2) == (inferType' exp3)) = inferType' exp2
+      | otherwise = TErr
+    inferType' (App fun argument) 
+      | (TFun from to) <- inferType' fun, argumentType == from = to
+      | otherwise = TErr 
+        where
+          --(TFun from to) = inferType' fun
+          argumentType = inferType' argument
+    inferType' (Fun str expr) = inferType' expr
 
+{-
+data Expr = Number Int |
+            Boolean Bool |
+            Id String  |
+            Prim String |
+            Cond Expr Expr Expr |
+            App Expr Expr |
+            Fun String Expr
+          deriving (Eq, Show)
+
+data Type = TInt |
+            TBool |
+            TFun Type Type |
+            TVar String |
+            TErr 
+          deriving (Eq, Show)
+-}
 ------------------------------------------------------
 -- PART III
 
