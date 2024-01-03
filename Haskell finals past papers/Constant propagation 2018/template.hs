@@ -66,9 +66,7 @@ execStatement doWhile@(DoWhile block exp) states
       newStates = foldl (flip update) states evalBlock
 
 execBlock :: Block -> State -> State
-execBlock inputBlock states
- -- = (flip concatMap) inputBlock ((flip execStatement) states)
-  = foldl ((flip execStatement)) states inputBlock
+execBlock = flip (foldl (flip execStatement))
 
 ------------------------------------------------------------------------
 -- Given function for testing propagateConstants...
@@ -83,23 +81,71 @@ applyPropagate (name, args, body)
 
 foldConst :: Exp -> Exp
 -- Pre: the expression is in SSA form
-foldConst 
-  = undefined
+foldConst phi@(Phi exp1 exp2)
+  | exp1 == exp2, (Const _) <- exp1 = exp1
+  | otherwise = phi
+foldConst (Apply Add (Const 0) n@(Var _)) = n
+foldConst (Apply Add n@(Var _) (Const 0)) = n
+foldConst (Apply op (Const a) (Const b)) = Const (apply op a b)
+foldConst e = e 
+
 
 sub :: Id -> Int -> Exp -> Exp
 -- Pre: the expression is in SSA form
-sub 
-  = undefined
+sub idToReplace newValue  = foldConst . sub'
+  where
+    sub' e@(Var id) 
+      | id == idToReplace = Const newValue
+      | otherwise = e
+    sub' (Phi exp1 exp2) = Phi (sub' exp1) (sub' exp2)
+    sub' (Apply op exp1 exp2) = Apply op (sub' exp1) (sub' exp2)
+    sub' e = e
 
 -- Use (by uncommenting) any of the following, as you see fit...
 -- type Worklist = [(Id, Int)]
 -- scan :: Id -> Int -> Block -> (Worklist, Block)
 -- scan :: (Exp -> Exp) -> Block -> (Exp -> Exp, Block)
- 
+type Worklist = [(Id, Int)]
+
 propagateConstants :: Block -> Block
 -- Pre: the block is in SSA form
-propagateConstants 
-  = undefined
+propagateConstants block 
+  | null neededAssignments = block
+  | otherwise = propagateConstants (simplifyBlock block)
+  where
+    neededAssignments = filter ((/= "$return"). fst) (concatMap assignmentsAvailable block)
+    assignmentsAvailable :: Statement -> Worklist
+    assignmentsAvailable (Assign id (Const c)) = [(id, c)]
+    assignmentsAvailable (DoWhile block' exp) = concatMap assignmentsAvailable block'
+    assignmentsAvailable (If exp block1 block2)
+      {-| toEnum (eval exp []) = concatMap assignmentsAvailable block1
+      | otherwise-} = concatMap assignmentsAvailable block2 ++ concatMap assignmentsAvailable block1
+    assignmentsAvailable e = []
+
+    subSentence (Assign id exp') = Assign id  (simplifyExp exp')
+    subSentence (If exp' block1 block2) = If (simplifyExp exp') (simplifyBlock block1) (simplifyBlock block2)
+    subSentence (DoWhile block' exp') = DoWhile (simplifyBlock block') (simplifyExp exp')
+     
+    simplifyExp :: Exp -> Exp
+    simplifyExp = (flip (foldl (flip (uncurry sub)))) neededAssignments
+
+    simplifyBlock :: Block -> Block
+    simplifyBlock block' = [subSentence s | s <- block', isNotAssign s]
+
+    isNotAssign :: Statement -> Bool
+    isNotAssign (Assign "$return" (Const c)) = True
+    isNotAssign (Assign id (Const c)) = False
+    isNotAssign _ = True
+
+    {-eval' (Apply op (Const a) (Const b)) = toEnum (apply op a b)
+    eval' _ = False-}
+    --scan :: Id -> Int -> Block -> (Worklist, Block)
+    --scan id int block = map
+-- get free vars
+--  Run on all free vars:
+       -- remove one and sub it 
+    --recall propagateConstants on new freeVars
+
 
 ------------------------------------------------------------------------
 -- Given functions for testing unPhi...
@@ -120,8 +166,27 @@ optimise (name, args, body)
 
 unPhi :: Block -> Block
 -- Pre: the block is in SSA form
-unPhi 
-  = undefined
+unPhi initialBlock = unPhi' initialBlock
+  where
+    unPhi' :: Block -> Block
+    unPhi' [] = []
+    unPhi' (x@(If exp block1 block2):xs) = x': other
+      where
+        (trues, falses) = unzip (map (\phi@(Assign id (Phi exp1 exp2)) -> (Assign id exp1, Assign id exp2)) (viewPhi xs))
+        x' = If exp ((unPhi' block1) ++ trues) ((unPhi' block2) ++ falses)
+        other = unPhi' (removePhi xs)
+    unPhi' ((DoWhile block1 exp):xs) = x' ++ other
+      where
+          (start, endBlocks) = unzip (map (\phi@(Assign id (Phi exp1 exp2)) -> (Assign id exp1, Assign id exp2)) (viewPhi block1))
+          x' = start ++ [DoWhile ((unPhi' (removePhi block1)) ++ endBlocks) exp]
+          other = unPhi'( removePhi xs)
+    unPhi' (x:xs) = x : unPhi' xs
+
+    viewPhi = takeWhile isPhi
+    removePhi = dropWhile isPhi
+
+    isPhi (Assign id (Phi exp1 exp2)) = True
+    isPhi _ = False
 
 ------------------------------------------------------------------------
 -- Part IV
