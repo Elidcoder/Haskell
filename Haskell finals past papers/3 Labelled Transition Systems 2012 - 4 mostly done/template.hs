@@ -23,33 +23,48 @@ type StateMap = [((State, State), State)]
 
 lookUp :: Eq a => a -> [(a, b)] -> b
 --Pre: The item is in the table
-lookUp
-  = undefined
+lookUp val = snd . head . dropWhile ((/= val) . fst) 
 
 states :: LTS -> [State]
-states
-  = undefined
+states = nub . concatMap (\((a,b), c) -> [a,b])
 
 transitions :: State -> LTS -> [Transition]
-transitions
-  = undefined
+transitions startState = filter ((== startState) . fst . fst)
 
 alphabet :: LTS -> Alphabet
-alphabet 
-  = undefined
+alphabet = nub . snd . unzip
 
 ------------------------------------------------------
 -- PART II
 
 actions :: Process -> [Id]
-actions
-  = undefined
+actions (Choice processes) = concatMap actions processes
+actions (Prefix id subProcess) = id : actions subProcess
+actions _ = []
 
 accepts :: [Id] -> [ProcessDef] -> Bool
 --Pre: The first item in the list of process definitions is
 --     that of the start process.
-accepts 
-  = undefined
+accepts possibleTr allProcesses@((_, initialProcess): _) = accepts' [] initialProcess
+  where
+    checkTr = (==) possibleTr 
+    -- unnecessary definition of check as it could be defined within fullCheck 
+    --however this makes it clearer and ensures the number of characters < 80
+    -- & inefficiency should be compiled away so there is no performance hit
+    checkLen = flip (<) (length possibleTr) . length
+    fullCheck inputTr = ((||) (checkTr inputTr)) . ((&&) (checkLen inputTr))
+    accepts' :: [String] -> Process -> Bool
+    accepts' currentTr (STOP) = (checkTr currentTr)
+    accepts' currentTr (Choice processOptions) = 
+        fullCheck currentTr (any (accepts' currentTr) processOptions)
+    accepts' currentTr (Ref id) = 
+        fullCheck currentTr (
+          accepts' 
+            currentTr 
+            ((snd . head . filter ((== id) . fst)) allProcesses)
+        )
+    accepts' currentTr (Prefix id process) =
+        fullCheck currentTr (accepts' (currentTr ++ [id]) process)
 
 ------------------------------------------------------
 -- PART III
@@ -62,20 +77,41 @@ accepts
 --     drawn; likewise the second.
 --Pre: All (four) pairs of source and target states drawn from the two transitions
 --     are contained in the given StateMap.
-composeTransitions
-  = undefined
+composeTransitions :: Transition -> Transition -> Alphabet -> Alphabet -> StateMap -> [Transition]
+composeTransitions ((initialStateL, finalStateL), idL) ((initialStateR, finalStateR), idR) alphabetL alphabetR stateMap
+  | idL == idR = [((i' (initialStateL,initialStateR), i' (finalStateL,finalStateR)), idL)]
+  | idLElAlphR && idRElAlphL = []
+  | idLElAlphR = [((i' (initialStateL,initialStateR), i' (initialStateL,finalStateR)), idR)]
+  | idRElAlphL = [((i' (initialStateL,initialStateR), i' (finalStateL,initialStateR)), idL)]
+  | otherwise = [((i' (initialStateL,initialStateR), i' (initialStateL,finalStateR)), idR), ((i' (initialStateL,initialStateR), i' (finalStateL,initialStateR)), idL)]
+  where 
+    idLElAlphR = idL `elem` alphabetR
+    idRElAlphL = idR `elem` alphabetL
+    i' = flip lookUp stateMap 
 
 pruneTransitions :: [Transition] -> LTS
-pruneTransitions 
-  = undefined
+pruneTransitions initialTransitions = initialTransitions \\ (removeReachable [0] initialTransitions)
+  where
+    removeReachable :: [State] -> [Transition] -> [Transition]
+    removeReachable nodeList transitionList 
+      | null possibleTransitions = transitionList
+      | otherwise = removeReachable connectingNodes impossibleTransitions
+        where
+          (possibleTransitions, impossibleTransitions) = partition ((`elem` nodeList) . fst .fst) transitionList
+          connectingNodes = map (snd . fst) possibleTransitions
 
 ------------------------------------------------------
 -- PART IV
 
 compose :: LTS -> LTS -> LTS
-compose 
-  = undefined
-
+compose ltsLeft ltsRight = finalTransitions
+  where
+    leftAlphabet = alphabet ltsLeft
+    rightAlphabet = alphabet ltsRight
+    setOfStatePairs = [(x, y) | x <- states ltsLeft, y <- states ltsRight] 
+    i' = zip setOfStatePairs [0..]
+    finalTransitions = pruneTransitions ( concat [(composeTransitions l' r' lAlph rAlph i') | (l,r) <- setOfStatePairs, l' <- transitions l ltsLeft, r' <- transitions r ltsRight, let lAlph = alphabet (transitions l ltsLeft), let rAlph = alphabet (transitions r ltsRight)])
+--untested, 2nd part of composition undone 
 ------------------------------------------------------
 -- PART V
 
