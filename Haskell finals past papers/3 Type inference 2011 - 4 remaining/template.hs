@@ -84,11 +84,8 @@ inferType initialExpr environment = inferType' initialExpr
       | ((inferType' exp1) == TBool) && ((inferType' exp2) == (inferType' exp3)) = inferType' exp2
       | otherwise = TErr
     inferType' (App fun argument) 
-      | (TFun from to) <- inferType' fun, argumentType == from = to
+      | (TFun from to) <- inferType' fun, (inferType' argument) == from = to
       | otherwise = TErr 
-        where
-          --(TFun from to) = inferType' fun
-          argumentType = inferType' argument
     inferType' (Fun str expr) = inferType' expr
 
 {-
@@ -111,17 +108,49 @@ data Type = TInt |
 ------------------------------------------------------
 -- PART III
 
-applySub
-  = undefined
+applySub :: Sub -> Type -> Type
+applySub subList initialType = applySub' initialType
+  where
+    applySub' :: Type -> Type
+    applySub' (TFun type1 type2) 
+      | (TFun subt21 subt22) <- subt2, subt1 == subt21 = TFun subt1 subt22
+      | otherwise = TFun subt1 subt2
+      where
+        subt1 = applySub' type1
+        subt2 = applySub' type2
+    applySub' inputType@(TVar id) = tryToLookUp id inputType subList
+    applySub' inputType = inputType
+
 
 unify :: Type -> Type -> Maybe Sub
 unify t t'
   = unifyPairs [(t, t')] []
-
+-- Occurs check and wtf the functions chekc is
 unifyPairs :: [(Type, Type)] -> Sub -> Maybe Sub
-unifyPairs
-  = undefined
-
+unifyPairs ((TInt, TInt): typePairs) subList = unifyPairs typePairs subList
+unifyPairs ((TBool, TBool): typePairs) subList = unifyPairs typePairs subList
+--unifyPairs ((TFun _ _, TVar id2): typePairs) subList = Nothing
+--unifyPairs ((TVar id1, TFun _ _): typePairs) subList = Nothing
+unifyPairs ((TVar id1, type2): typePairs) subList
+  | TVar id2 <- type2, id1 == id2 = unifyPairs typePairs subList
+  | occurs id1 type2 = Nothing  
+  | otherwise =
+    let 
+      newSubList = (id1, type2): subList 
+      applyNewSub = applySub newSubList
+    in 
+      unifyPairs (map (\(a, b) -> (applyNewSub a, applyNewSub b)) typePairs) newSubList
+unifyPairs ((type1, TVar id2): typePairs) subList  
+  | occurs id2 type1 = Nothing
+  | otherwise = 
+  let 
+    newSubList = (id2, type1): subList 
+    applyNewSub = applySub newSubList
+  in 
+    unifyPairs (map (\(a, b) -> (applyNewSub a, applyNewSub b)) typePairs) newSubList
+unifyPairs ((TFun type1 type2, TFun type1' type2'): typePairs) subList =  unifyPairs ([(type1, type1'), (type2, type2')] ++ typePairs) subList
+unifyPairs [] subList = Just subList
+unifyPairs _ _= Nothing
 ------------------------------------------------------
 -- PART IV
 
@@ -142,16 +171,37 @@ combineSubs
   = foldr1 combine
 
 inferPolyType :: Expr -> Type
-inferPolyType
-  = undefined
+inferPolyType expr
+  = b
+  where
+    (a, b, c) = inferPolyType' expr [] (map show [0..])
+    --(a, b, c) = (flip ((flip inferPolyType') (map show [0..])) []) expr
 
 -- You may optionally wish to use one of the following helper function declarations
 -- as suggested in the specification. 
-
--- inferPolyType' :: Expr -> TEnv -> [String] -> (Sub, Type, [String])
--- inferPolyType'
---   = undefined
-
+--ex12 = Fun "x" (Fun "y" (App (Id "y") (Id "x")))
+inferPolyType' :: Expr -> TEnv -> [String] -> (Sub, Type, [String])
+inferPolyType' (Number _) assignments availableNames = (assignments, TInt, availableNames)
+inferPolyType' (Prim str) assignments availableNames = (assignments, lookUp str primTypes, availableNames)
+inferPolyType' (Id str) assignments availableNames = (assignments, lookUp str assignments, availableNames)
+inferPolyType' (Boolean _) assignments availableNames = (assignments, TBool, availableNames)
+inferPolyType' (Fun x e) assignments (name: names) 
+  | te == TErr = (assignments', TErr, availableNames')
+  | otherwise = (assignments',applySub assignments' (TFun ( xTempType) te), availableNames')
+  where
+    xTempType = TVar ("a" ++ name)
+    newAssignments = (x, xTempType) : assignments
+    (assignments', te, availableNames') = inferPolyType' e newAssignments names 
+inferPolyType' (App fun argument) assignments availableNames
+--possible terr check needed
+  | (TFun startType endType) <- funType, startType == argType = (assignments'', endType, names'')
+  | (TFun startType endType) <- funType, (Just subList) <- (unify (applySub assignments'' startType) (applySub assignments argType)) = ((subList ++ assignments''), (TFun (applySub subList startType) (applySub subList endType)),  names'')
+  | (Just subList) <- (unify funType argType) = ((subList ++ assignments''), (TFun (applySub subList funType) (applySub subList argType)),  names'')
+  |  otherwise = (assignments'', TErr, names'')
+    where 
+      (assignments', funType, names') = inferPolyType' fun assignments availableNames 
+      (assignments'', argType, names'') = inferPolyType' argument assignments' names'
+inferPolyType' currentExpression assignments availableNames = undefined
 -- inferPolyType' :: Expr -> TEnv -> Int -> (Sub, Type, Int)
 -- inferPolyType' 
 --   = undefined
