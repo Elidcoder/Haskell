@@ -136,7 +136,12 @@ data Exp = Const Value |
            FunApp Id [Exp] 
          deriving (Eq, Show)
 
-type FunDef = (Id, ([Id], Exp))-}
+type FunDef = (Id, ([Id], Exp))
+
+type Binding = (Id, (Scope, Value))
+
+type State = [Binding]
+-}
 ---------------------------------------------------------------------
 -- Part III
 
@@ -144,14 +149,61 @@ executeStatement :: Statement -> [FunDef] -> [ProcDef] -> State -> State
 -- Pre: All statements are well formed 
 -- Pre: For array element assignment (AssignA) the array variable is in scope,
 --      i.e. it has a binding in the given state
-executeStatement 
-  = undefined
+executeStatement (Assign id exp) funcDefs _ funcBinds = updateVar (id, (eval exp funcDefs funcBinds)) funcBinds
+executeStatement (AssignA id indexExpr valueExpr) funcDefs procDefs funcBinds = updateVar (id, newArray) funcBinds
+  where
+    eval' = flip (flip eval funcDefs) funcBinds
+    initialArray = getValue id funcBinds
+    newArray = assignArray initialArray (eval' indexExpr) (eval' valueExpr)
+executeStatement (If exp blockTrue blockFalse) funcDefs procDefs funcBinds 
+  | (I value) <- (eval exp funcDefs funcBinds), toEnum value = executeBlock' blockTrue 
+  | otherwise = executeBlock' blockFalse 
+    where
+      executeBlock' = flip (flip (flip executeBlock funcDefs) procDefs) funcBinds
+executeStatement whileStatement@(While exp block) funcDefs procDefs funcBinds 
+  | (I value) <- (eval exp funcDefs funcBinds), toEnum value = 
+    let 
+        --could be other way around
+      newBinds = executeBlock block funcDefs procDefs funcBinds ++ funcBinds
+    in 
+      executeStatement whileStatement funcDefs procDefs newBinds 
+  | otherwise = funcBinds
+executeStatement (Call "" id2 exprs) funcDefs procDefs funcBinds = return'
+  where
+    (ids, blockToExec) = lookUp id2 procDefs 
+    eval' = flip (flip eval funcDefs) funcBinds
+    values = map eval' exprs
+    returnedStates = executeBlock blockToExec funcDefs procDefs ((bindArgs ids values) ++ (getGlobals funcBinds))
+    return' = (getLocals funcBinds) ++ (getGlobals returnedStates)
+executeStatement (Call id1 id2 exprs) funcDefs procDefs funcBinds = return'
+  where
+    (ids, blockToExec) = lookUp id2 procDefs 
+    eval' = flip (flip eval funcDefs) funcBinds
+    values = map eval' exprs
+    returnedStates = executeBlock blockToExec funcDefs procDefs ((bindArgs ids values) ++ (getGlobals funcBinds))
+    return' = updateVar (id1, (getValue "$res" returnedStates))  ((getLocals funcBinds) ++ (getGlobals returnedStates))
+
+executeStatement (Return exp) funcDefs procDefs funcBinds = updateVar ("$res",(eval exp funcDefs funcBinds)) funcBinds
+--may not need to be update
 
 executeBlock :: Block -> [FunDef] -> [ProcDef] -> State -> State
 -- Pre: All code blocks and associated statements are well formed
-executeBlock 
-  = undefined
+executeBlock statements funcDefs procDefs initialStates = foldl (flip executeStatement') initialStates statements
+  where 
+    executeStatement' = flip (flip executeStatement funcDefs) procDefs
+{-
+data Statement = Assign Id Exp |
+     AssignA Id Exp Exp |
+     If Exp Block Block |
+     While Exp Block |
+     Call Id Id [Exp] |
+     Return Exp 
+   deriving (Eq, Show)
+type ProcDef = (Id, ([Id], Block))
+type Binding = (Id, (Scope, Value))
+type State = [Binding]
 
+-}
 ---------------------------------------------------------------------
 -- Part IV
 
