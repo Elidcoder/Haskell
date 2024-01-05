@@ -61,51 +61,82 @@ type State = [Binding]
 
 getValue :: Id -> State -> Value
 -- Pre: The identifier has a binding in the state
-getValue 
-  = undefined
+getValue idToMatch = snd . snd . head . dropWhile ((/= idToMatch) . fst)
 
 getLocals :: State -> State
-getLocals
-  = undefined
+getLocals = filter ((== Local) . fst . snd)
 
 getGlobals :: State -> State
-getGlobals
-  = undefined
+getGlobals = filter ((== Global) . fst . snd)
 
 assignArray :: Value -> Value -> Value -> Value
 -- The arguments are the array, index and (new) value respectively
 -- Pre: The three values have the appropriate value types (array (A), 
 --      integer (I) and integer (I)) respectively.
-assignArray 
-  = undefined
+assignArray (A intList) (I index) (I newValue)
+  = A ((index, newValue): filter ((/= index). fst) intList)
 
 updateVar :: (Id, Value) -> State -> State
-updateVar 
-  = undefined
+updateVar (idToMatch, newValue) allValueSets
+  | (Just (state, value)) <- (lookup idToMatch allValueSets) = 
+    let 
+      newBinding = (idToMatch, (state, newValue))
+      listWithoutOldBinding = filter ((/= idToMatch) . fst) allValueSets
+    in
+      newBinding: listWithoutOldBinding 
+  | otherwise = (idToMatch, (Local, newValue)) : allValueSets
 
 ---------------------------------------------------------------------
 -- Part II
 
 applyOp :: Op -> Value -> Value -> Value
 -- Pre: The values have the appropriate types (I or A) for each primitive
-applyOp 
-  = undefined
+applyOp Add (I leftNumb) (I rightNumb) = I (leftNumb + rightNumb)
+applyOp Mul (I leftNumb) (I rightNumb) = I (leftNumb * rightNumb)
+applyOp Less (I leftNumb) (I rightNumb) = I (fromEnum (leftNumb < rightNumb))
+applyOp Equal (I leftNumb) (I rightNumb) = I ((fromEnum . (== leftNumb)) rightNumb)
+applyOp Index (A pairList) (I idForLookup) = I (fromMaybe 0 (lookup idForLookup pairList))
 
 bindArgs :: [Id] -> [Value] -> State
 -- Pre: the lists have the same length
-bindArgs
-  = undefined
+bindArgs listId
+  = (map (\(a,b) -> (a, (Local, b)))) . zip listId
 
 evalArgs :: [Exp] -> [FunDef] -> State -> [Value]
-evalArgs
-  = undefined
+evalArgs exprList funcDefs funcBinds 
+  = map (flip (flip eval funcDefs) funcBinds) exprList
 
 eval :: Exp -> [FunDef] -> State -> Value
 -- Pre: All expressions are well formed
 -- Pre: All variables referenced have bindings in the given state
-eval 
-  = undefined
+eval (Const value) _ _ = value
+eval (Var variableId) _ funcBinds = getValue variableId funcBinds
+eval (Cond condition trueExp falseExp) funcDefs funcBinds 
+  | (I value) <- (eval' condition), toEnum value = eval' trueExp
+  | otherwise = eval' falseExp
+    where
+        eval' = flip (flip eval funcDefs) funcBinds
+eval (OpApp op argL argR) funcDefs funcBinds 
+  = applyOp op (eval' argL) (eval' argR)
+    where
+        eval' = flip (flip eval funcDefs) funcBinds
+eval (FunApp funcId exprs) funcDefs funcBinds = eval funExpr funcDefs (bindArgsFuncVals ++ funcBinds)
+  where
+    (ids, funExpr) = lookUp funcId funcDefs
+    evalFunExprs = evalArgs exprs funcDefs funcBinds
+    bindArgsFuncVals = bindArgs ids evalFunExprs
+{-
+data Value = I Int | A [(Int, Int)]
+           deriving (Eq, Show)
 
+data Exp = Const Value | 
+           Var Id | 
+           OpApp Op Exp Exp |
+           Cond Exp Exp Exp |
+           FunApp Id [Exp] 
+         deriving (Eq, Show)
+
+type FunDef = (Id, ([Id], Exp))-}
 ---------------------------------------------------------------------
 -- Part III
 
