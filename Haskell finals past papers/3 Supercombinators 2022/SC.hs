@@ -120,7 +120,7 @@ lift
 -- You may wish to use this...
 lift' :: Exp -> (Exp, [Supercombinator])
 lift' (Let bindings exp)
-  = 
+  = undefined
   where
     (supercombinators, otherBinds) = partition (/ISSUPERCOMBINATOR/)
 
